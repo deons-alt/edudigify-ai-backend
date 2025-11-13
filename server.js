@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { GoogleGenAI } from "@google/genai";  // ✅ correct export for stable SDK
+import { GoogleGenerativeAI } from "@google/generative-ai"; // ✅ Use the stable SDK
 
 const app = express();
 app.use(cors());
@@ -9,13 +9,11 @@ app.use(express.json());
 const PORT = process.env.PORT || 10000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// ✅ Initialize Gemini client
-const ai = new GoogleGenAI({
-  apiKey: GEMINI_API_KEY,
-});
+// ✅ Initialize Gemini client correctly
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 app.get("/", (req, res) => {
-  res.send("✅ Edudigify AI Backend Running with Google GenAI SDK");
+  res.send("✅ Edudigify AI Backend Running with Stable SDK");
 });
 
 app.post("/generateLessonNote", async (req, res) => {
@@ -40,16 +38,27 @@ Include these sections clearly:
 3. Evaluation & Assignment
 `;
 
-    // ✅ use gemini-2.0-flash or gemini-2.5-flash depending on support
-    const result = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
+    // ✅ Configure the model
+    // Note: Use "gemini-1.5-flash" for stability, or "gemini-2.0-flash-exp" if you have access to the preview.
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const text = result.response.text;
+    // ✅ Generate Content
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+
+    // ✅ Fix: text() is a FUNCTION, not a property
+    const text = response.text(); 
+    
     res.json({ lessonNote: text });
+
   } catch (error) {
     console.error("AI Generation Error:", error);
+    
+    // Handle safety blocks explicitly
+    if (error.message && error.message.includes("SAFETY")) {
+        return res.status(400).json({ error: "Content blocked by safety filters." });
+    }
+
     res.status(500).json({
       error: "Failed to generate lesson note",
       details: error.message,
