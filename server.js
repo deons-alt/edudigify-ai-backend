@@ -38,26 +38,28 @@ Include these sections clearly:
 3. Evaluation & Assignment
 `;
 
-    // ✅ Configure the model
-    // Note: Use "gemini-1.5-flash" for stability, or "gemini-2.0-flash-exp" if you have access to the preview.
-    // Use the specific version identifier
-const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
 
-    // ✅ Generate Content
-    const result = await model.generateContent(prompt);
+    // ✅ Add timeout support (30 seconds)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+    const result = await model.generateContent(
+      { contents: [{ role: "user", parts: [{ text: prompt }] }] },
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeout);
+
     const response = await result.response;
+    const text = response.text();
 
-    // ✅ Fix: text() is a FUNCTION, not a property
-    const text = response.text(); 
-    
     res.json({ lessonNote: text });
-
   } catch (error) {
     console.error("AI Generation Error:", error);
-    
-    // Handle safety blocks explicitly
-    if (error.message && error.message.includes("SAFETY")) {
-        return res.status(400).json({ error: "Content blocked by safety filters." });
+
+    if (error.name === "AbortError") {
+      return res.status(504).json({ error: "AI request timed out. Please try again." });
     }
 
     res.status(500).json({
