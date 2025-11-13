@@ -1,67 +1,57 @@
 import express from "express";
 import cors from "cors";
-import axios from "axios";
+import { GoogleGenerativeAI } from "@google/genai";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// === GEMINI CONFIG ===
+const PORT = process.env.PORT || 10000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = "gemini-1.5-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent`;
 
+// ✅ Initialize Gemini client
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-
-// === ROUTE ===
-app.post("/generateLessonNote", async (req, res) => {
-  try {
-    const { subject, topic, classLevel, week, term } = req.body;
-
-    const prompt = `
-Generate a detailed lesson note for:
-Class: ${classLevel}
-Subject: ${subject}
-Topic: ${topic}
-Week: ${week || "N/A"}, Term: ${term || "N/A"}
-
-Include sections:
-1. Lesson Objectives
-2. Materials/Teaching Aids
-3. Lesson Development/Content
-4. Summary
-5. Evaluation/Assignment
-Format the result as clear text.
-`;
-
-    const response = await axios.post(
-  GEMINI_URL,
-  {
-    contents: [{ parts: [{ text: prompt }] }],
-  },
-  {
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": GEMINI_API_KEY, // ✅ API key now passed in header
-    },
-  }
-);
-
-const output =
-  response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-  "No response generated.";
-
-res.json({ lessonNote: output });
-} catch (error) {
-  console.error("AI Generation Error:", error.response?.data || error.message);
-  res.status(500).json({
-    error: "Failed to generate lesson note",
-    details: error.response?.data || error.message,
-  });
-}
-
+app.get("/", (req, res) => {
+  res.send("✅ Edudigify AI Backend Running");
 });
 
-app.get("/", (req, res) => res.send("✅ Edudigify AI Backend Running"));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.post("/generateLessonNote", async (req, res) => {
+  try {
+    const { classLevel, subject, topic, week, term } = req.body;
+
+    if (!classLevel || !subject || !topic) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const prompt = `
+Generate a structured lesson note for:
+- Class: ${classLevel}
+- Subject: ${subject}
+- Topic: ${topic}
+- Term: ${term || "Current Term"}
+- Week: ${week || "Not specified"}
+
+Include these sections clearly:
+1. Objectives
+2. Lesson Procedure / Content
+3. Evaluation & Assignment
+`;
+
+    // ✅ Generate content using Gemini 2.5 Flash
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const result = await model.generateContent(prompt);
+
+    const aiText = result.response.text();
+    res.json({ lessonNote: aiText });
+  } catch (error) {
+    console.error("AI Generation Error:", error);
+    res.status(500).json({
+      error: "Failed to generate lesson note",
+      details: error.message,
+    });
+  }
+});
+
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
