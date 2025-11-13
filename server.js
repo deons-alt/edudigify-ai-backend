@@ -9,7 +9,8 @@ app.use(express.json());
 // === GEMINI CONFIG ===
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-1.5-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta1/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta1/models/${GEMINI_MODEL}:generateContent`;
+
 
 // === ROUTE ===
 app.post("/generateLessonNote", async (req, res) => {
@@ -32,18 +33,32 @@ Include sections:
 Format the result as clear text.
 `;
 
-    const response = await axios.post(GEMINI_URL, {
-      contents: [{ parts: [{ text: prompt }] }],
-    });
-
-    const output =
-      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "No response generated.";
-    res.json({ lessonNote: output });
-  } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to generate lesson note" });
+    const response = await axios.post(
+  GEMINI_URL,
+  {
+    contents: [{ parts: [{ text: prompt }] }],
+  },
+  {
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY, // ✅ API key now passed in header
+    },
   }
+);
+
+const output =
+  response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+  "No response generated.";
+
+res.json({ lessonNote: output });
+} catch (error) {
+  console.error("AI Generation Error:", error.response?.data || error.message);
+  res.status(500).json({
+    error: "Failed to generate lesson note",
+    details: error.response?.data || error.message,
+  });
+}
+
 });
 
 app.get("/", (req, res) => res.send("✅ Edudigify AI Backend Running"));
