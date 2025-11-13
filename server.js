@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { GoogleAI } from "@google/genai";  // ✅ FIXED import
+import { GoogleGenAI } from "@google/genai";  // ✅ correct export for stable SDK
 
 const app = express();
 app.use(cors());
@@ -10,10 +10,12 @@ const PORT = process.env.PORT || 10000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // ✅ Initialize Gemini client
-const ai = new GoogleAI({ apiKey: GEMINI_API_KEY });
+const ai = new GoogleGenAI({
+  apiKey: GEMINI_API_KEY,
+});
 
 app.get("/", (req, res) => {
-  res.send("✅ Edudigify AI Backend Running (Gemini SDK)");
+  res.send("✅ Edudigify AI Backend Running with Google GenAI SDK");
 });
 
 app.post("/generateLessonNote", async (req, res) => {
@@ -38,11 +40,13 @@ Include these sections clearly:
 3. Evaluation & Assignment
 `;
 
-    const model = ai.getGenerativeModel({ model: "gemini-2.5-flash" });
+    // ✅ use gemini-2.0-flash or gemini-2.5-flash depending on support
+    const result = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: prompt,
+    });
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
+    const text = result.response.text;
     res.json({ lessonNote: text });
   } catch (error) {
     console.error("AI Generation Error:", error);
