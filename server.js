@@ -41,7 +41,7 @@ Include these sections clearly:
     // ✅ Configure the model
     // Note: Use "gemini-1.5-flash" for stability, or "gemini-2.0-flash-exp" if you have access to the preview.
     // Use the specific version identifier
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
+const model = genAI.getGenerativeModel({ model: "models/gemini-2.5-flash" });
 
     // ✅ Generate Content
     const result = await model.generateContent(prompt);
