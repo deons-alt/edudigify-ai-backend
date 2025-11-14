@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import axios from "axios";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const app = express();
 app.use(cors());
@@ -9,86 +9,78 @@ app.use(express.json());
 const PORT = process.env.PORT || 10000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Base URL
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-const MAX_RETRIES = 3;
+// Initialize Gemini client
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 app.get("/", (req, res) => {
-  res.send("✅ Edudigify AI Backend Running (Direct API Mode)");
+  res.send("✅ Edudigify AI Backend Running (Stable SDK)");
 });
 
 app.post("/generateLessonNote", async (req, res) => {
-  const { classLevel, subject, topic, week, term } = req.body;
+  try {
+    const { classLevel, subject, topic, week, term } = req.body;
 
-  if (!classLevel || !subject || !topic) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
+    if (!classLevel || !subject || !topic) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-  const prompt = `
+    const prompt = `
 Generate a structured lesson note for:
 - Class: ${classLevel}
 - Subject: ${subject}
 - Topic: ${topic}
-- Week: ${week || "Not specified"}
 - Term: ${term || "Current Term"}
+- Week: ${week || "Not specified"}
 
-Include:
+Include these sections clearly:
 1. Objectives
-2. Lesson Procedure
+2. Lesson Procedure / Content
 3. Evaluation & Assignment
 `;
 
-  async function callGoogleAPI(attempt = 1) {
-    try {
-      const response = await axios.post(
-        GEMINI_URL,
-        {
-          contents: [
-            {
-              parts: [{ text: prompt }],
-            },
-          ],
-        },
-        {
-          timeout: 60000, // 60 seconds
-        }
-      );
+    // Correct model name (SDK format, NOT REST format)
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash", 
+    });
 
-      return response.data;
-    } catch (err) {
-      console.log(`Retry ${attempt} failed:`, err.message);
+    // 30-second timeout controller
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-      if (attempt < MAX_RETRIES) {
-        return await callGoogleAPI(attempt + 1);
-      }
+    const result = await model.generateContent(
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }],
+          },
+        ],
+      },
+      { signal: controller.signal }
+    );
 
-      throw err;
-    }
-  }
+    clearTimeout(timeout);
 
-  try {
-    const data = await callGoogleAPI();
-    const output =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "No response generated.";
+    const response = result.response;
+    const text = response.text();
 
-    res.json({ lessonNote: output });
+    res.json({ lessonNote: text });
   } catch (error) {
-    console.error("AI ERROR:", error.response?.data || error.message);
+    console.error("AI Generation Error:", error);
 
-    if (error.code === "ECONNABORTED") {
+    // Handle timeouts
+    if (error.name === "AbortError") {
       return res.status(504).json({
-        error: "AI request timeout. Please try again.",
+        error:
+          "AI request timed out. (Likely due to Render free-tier cold start). Please try again.",
       });
     }
 
     res.status(500).json({
       error: "Failed to generate lesson note",
-      details: error.response?.data || error.message,
+      details: error.message,
     });
   }
 });
 
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
